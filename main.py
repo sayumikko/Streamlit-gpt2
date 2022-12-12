@@ -2,53 +2,39 @@ import streamlit as sl
 from transformers import pipeline, set_seed
 
 
-def is_int(str):
-    try:
-        int(str)
-        return True
-    except ValueError:
-        return False
-
-
 @sl.cache(suppress_st_warning=True, allow_output_mutation=True)
 def init():
     return pipeline('text-generation', model='gpt2')
 
 
-GENERATOR = init()
+def generate_text(input_text, seed, max_len, min_len, num_return_seq, num_beams, top_p, top_k, do_sample):
+    set_seed(seed)
 
+    generator = init()
 
-def generate_text(input_text, seed, max_len, num_return_seq):
-    if is_int(seed):
-        seed = abs(int(seed))
-        if seed > 2 ** 32 - 1:
-            set_seed(42)
-        else:
-            set_seed(seed)
-    else:
-        set_seed(42)
-
-    if is_int(max_len):
-        max_len = abs(int(max_len))
-    else:
-        max_len = 30
-
-    if is_int(num_return_seq):
-        num_return_seq = abs(int(num_return_seq))
-    else:
-        num_return_seq = 5
-
-    return GENERATOR(input_text,
+    return generator(input_text,
                      max_length=max_len,
-                     num_return_sequences=num_return_seq)
+                     num_return_sequences=num_return_seq, min_length=min_len, num_beams=num_beams, top_p=top_p, top_k=top_k, do_sample=do_sample)
 
 
 def prefs():
-    seed = sl.text_input("Input seed (an integer between 1 and 2**32-1)")
-    max_length = sl.text_input("Input maximum number of words of the text")
-    num_return_sequence = sl.text_input(
-        "Input the number of desired generations")
-    return seed, max_length, num_return_sequence
+    seed = sl.number_input(
+        label="Input seed (an integer between 1 and 2**32-1)", min_value=0, max_value=2**32-1, value=42)
+    max_length = sl.number_input(
+        label="Input maximum number of words of the text", min_value=0, value=30)
+    min_length = sl.number_input(
+        label="Input minimum number of words of the text", min_value=0, max_value=max_length, value=10)
+    num_return_sequence = sl.number_input(
+        label="Input the number of desired generations", min_value=0, value=5)
+    num_beams = sl.number_input(
+        label="Input the size of beam search, a bigger value gives more accurate, but strict text. 1 means no beam search", min_value=1, value=1)
+    top_k = sl.number_input(
+        label="Input the number of highest probability vocabulary tokens to keep for top-k-filtering.", value=50, )
+    top_p = sl.number_input(
+        label="Input the top-p-filtering.", value=1.0, step=0.1)
+    do_sample = sl.checkbox(
+        "Do you want to do sample? These make the text more alive.")
+    return seed, max_length, min_length, num_return_sequence, num_beams, top_p, top_k, do_sample
 
 
 def main():
@@ -56,43 +42,19 @@ def main():
 
     with sl.sidebar:
         sl.header("Preferences")
-        seed, max_length, num_return_sequence = prefs()
-        sl.header("Current:")
-
-        sl.caption("Seed:")
-        if is_int(seed):
-            if int(seed) > 2 ** 32 - 1:
-                sl.write('42')
-            else:
-                sl.write(str(abs(int(seed))))
-        else:
-            sl.write('42')
-
-        sl.caption("String length:")
-        if is_int(max_length):
-            sl.write(str(abs(int(max_length))))
-        else:
-            sl.write('30')
-
-        sl.caption("Number of generations:")
-        if is_int(num_return_sequence):
-            sl.write(str(abs(int(num_return_sequence))))
-        else:
-            sl.write('5')
+        seed, max_length, min_length, num_return_sequence, num_beams, top_p, top_k, do_sample = prefs()
 
     if sl.button("Generate"):
         sl.caption("Generating...")
 
-        result = generate_text(
-            input_text, seed, max_length, num_return_sequence)
+        result = generate_text(input_text,
+                               seed, max_length, min_length, num_return_sequence, num_beams, top_p, top_k, do_sample)
 
         sl.caption("Generation result:")
 
-        i = 1
-        for res in result:
-            sl.caption(i)
+        for i, res in enumerate(result):
+            sl.caption(i+1)
             sl.write(res['generated_text'])
-            i += 1
 
 
 if __name__ == "__main__":
